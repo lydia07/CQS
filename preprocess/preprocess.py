@@ -23,7 +23,8 @@ class KeywordGenerator:
                     questions = []
                     for q in p['qas']:
                         # including impossible questions
-                        questions.append(q['question'])
+                        if not q['is_impossible']:
+                            questions.append(q['question'])
                     paragraph['questions'] = questions
                     paragraphs.append(paragraph)
         # print(paragraphs[0])
@@ -63,7 +64,7 @@ class KeywordGenerator:
                         paragraph_kw['keywords'][k] = []
                     paragraph_kw['keywords'][k].append(q)
             print(paragraph_kw)
-            if paragraph_kw['keywords']:
+            if len(paragraph_kw['keywords'].keys()):
                 paragraphs_kw.append(paragraph_kw)
         return paragraphs_kw
 
@@ -75,9 +76,8 @@ class KeywordGenerator:
 
 
 if __name__ == '__main__':
-    ner_model = Ner(device=3)
+    ner_model = Ner(device=2)
     # keyword_generator = KeywordGenerator(ner_model)
     # result = keyword_generator.predict("In what country is Normandy located?")
     keyword_generator = KeywordGenerator(ner_model=ner_model, data_dir='train-v2.0.json', output_dir='dataset/SQuAD_k/train-v2.0-k.json')
     keyword_generator.save_data()
-    # print(result)
