@@ -6,16 +6,23 @@ from tqdm import tqdm
 
 class KeywordGenerator:
 
-    def __init__(self, data_dir, output_dir, ner_model=None, base_dir='dataset/SQuAD/'):
+    def __init__(self, data_dir=None, output_dir=None, enhance=False, src_path=None, tgt_path=None, ner_model=None):
         self.ner_model = ner_model
-        self.paragraphs = self.load_data(base_dir+data_dir)
         self.output_dir = output_dir
+        self.enhance = enhance
+        self.src_path = src_path
+        self.tgt_path = tgt_path
+        if data_dir and output_dir:
+            self.paragraphs = self.load_data(data_dir)
+        
 
     def load_data(self, data_dir):
         paragraphs = []
         with open(data_dir, 'r') as f:
             load_dict = json.load(f)
             data = load_dict['data']
+            if self.enhance:
+                data = self.enhance_data(data, self.src_path, self.tgt_path)
             for title in data:
                 for p in title['paragraphs']:
                     paragraph = {}
@@ -30,6 +37,22 @@ class KeywordGenerator:
         # print(paragraphs[0])
         return paragraphs
 
+    def enhance_data(self, data, src_path, tgt_path):
+        res = data
+        src_file = open(src_path, 'r')
+        tgt_file = open(tgt_path, 'r')
+        src_lines = src_file.readlines()
+        tgt_lines = tgt_file.readlines()
+        for src, tgt in zip(src_lines, tgt_lines):
+            src = json.loads(src)
+            data_id = src['data_id']
+            para_id = src['para_id']
+            generated_q = {}
+            generated_q['question'] = tgt
+            generated_q['is_impossible'] = True
+            res[data_id]['paragraphs'][para_id]['qas'].append(generated_q)
+        return res
+
     def predict(self, sent):
         output = self.ner_model.predict(sent)
         return output
@@ -39,6 +62,7 @@ class KeywordGenerator:
         word_tag_pairs = self.ner_model.predict(sent)
         keyword = ''
         for pair in word_tag_pairs:
+            # print(pair['tag'])
             if pair['tag'][0] == 'B':
                 if keyword:
                     keywords.append(keyword)
@@ -48,7 +72,7 @@ class KeywordGenerator:
                 keyword += ' '+pair['word']
         if keyword:
             keywords.append(keyword)
-        print(keywords)
+        print('sent:{},keywords:{}'.format(sent, keywords))
         return keywords
 
     def add_keywords(self):
@@ -76,8 +100,16 @@ class KeywordGenerator:
 
 
 if __name__ == '__main__':
-    ner_model = Ner(device=2)
-    # keyword_generator = KeywordGenerator(ner_model)
-    # result = keyword_generator.predict("In what country is Normandy located?")
-    keyword_generator = KeywordGenerator(ner_model=ner_model, data_dir='train-v2.0.json', output_dir='dataset/SQuAD_k/train-v2.0-k.json')
+    ner_model = Ner('/data/hyx/workspace/BERT-NER/out_base/')
+    # keyword_generator = KeywordGenerator(ner_model=ner_model)
+    # result = keyword_generator.predict("What was the name Loughborough University was known by from 1966 to 1996?")
+    # print(result)
+    # res = keyword_generator.generate_keywords("What was the name Loughborough University was known by from 1966 to 1996?")
+    # print(res)
+    data_dir='/data/hyx/workspace/CQS/dataset/SQuAD/train-v2.0.json'
+    output_dir='/data/hyx/workspace/CQS/dataset/SQuAD_a/train-v2.0-k.json'
+    src_path = '/data/hyx/workspace/CQS/dataset/SQuAD_a/train.json'
+    tgt_path = '/data/hyx/workspace/CQS/dataset/SQuAD_a/output.json'
+    enhance = True
+    keyword_generator = KeywordGenerator(ner_model=ner_model, data_dir=data_dir, output_dir=output_dir, enhance=enhance, src_path=src_path, tgt_path=tgt_path)
     keyword_generator.save_data()

@@ -14,10 +14,10 @@ from pytorch_transformers import (BertConfig, BertForTokenClassification,
 
 class BertNer(BertForTokenClassification):
 
-    def forward(self, input_ids, token_type_ids=None, attention_mask=None, valid_ids=None, device='cpu'):
+    def forward(self, input_ids, token_type_ids=None, attention_mask=None, valid_ids=None):
         sequence_output = self.bert(input_ids, token_type_ids, attention_mask, head_mask=None)[0]
         batch_size,max_len,feat_dim = sequence_output.shape
-        valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32, device=device)  # ,device='cuda' if torch.cuda.is_available() else 'cpu'
+        valid_output = torch.zeros(batch_size,max_len,feat_dim,dtype=torch.float32,device='cuda' if torch.cuda.is_available() else 'cpu')
         for i in range(batch_size):
             jj = -1
             for j in range(max_len):
@@ -30,12 +30,12 @@ class BertNer(BertForTokenClassification):
 
 class Ner:
 
-    def __init__(self, model_dir='out_base/', device='cpu'):
+    def __init__(self,model_dir: str):
         self.model , self.tokenizer, self.model_config = self.load_model(model_dir)
         self.label_map = self.model_config["label_map"]
         self.max_seq_length = self.model_config["max_seq_length"]
         self.label_map = {int(k):v for k,v in self.label_map.items()}
-        self.device = 'cpu' if device == -1 else device
+        self.device = "cuda" if torch.cuda.is_available() else "cpu"
         self.model = self.model.to(self.device)
         self.model.eval()
 
@@ -89,7 +89,7 @@ class Ner:
         segment_ids = torch.tensor([segment_ids],dtype=torch.long,device=self.device)
         valid_ids = torch.tensor([valid_ids],dtype=torch.long,device=self.device)
         with torch.no_grad():
-            logits = self.model(input_ids, segment_ids, input_mask, valid_ids, device=self.device)
+            logits = self.model(input_ids, segment_ids, input_mask,valid_ids)
         logits = F.softmax(logits,dim=2)
         logits_label = torch.argmax(logits,dim=2)
         logits_label = logits_label.detach().cpu().numpy().tolist()[0]

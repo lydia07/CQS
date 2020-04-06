@@ -60,7 +60,7 @@ class DataStat:
 
 
 if __name__ == '__main__':
-    datastat = DataStat('/data/hyx/workspace/CQS/dataset/SQuAD_k/dev-v2.0-k.json')
-    datastat.show_stat()
-    datastat = DataStat('/data/hyx/workspace/CQS/dataset/SQuAD_k/train-v2.0-k.json')
+    # datastat = DataStat('/data/hyx/workspace/CQS/dataset/SQuAD_k/dev-v2.0-k.json')
+    # datastat.show_stat()
+    datastat = DataStat('/data/hyx/workspace/CQS/dataset/SQuAD_a/train-v2.0-k.json')
     datastat.show_stat()

@@ -3,3 +3,6 @@
 /bert-large-cased/
 /__pycache__/
 /out_base/
+/nqg_model/
+/nlu_model/
+/preprocess/__pycache__/
