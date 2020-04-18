@@ -24,8 +24,10 @@ class KeywordGenerator:
             if self.enhance:
                 data = self.enhance_data(data, self.src_path, self.tgt_path)
             for title in data:
+                title_name = title['title']
                 for p in title['paragraphs']:
                     paragraph = {}
+                    paragraph['title'] = title_name
                     paragraph['context'] = p['context']
                     questions = []
                     for q in p['qas']:
@@ -91,6 +93,9 @@ class KeywordGenerator:
             if len(paragraph_kw['keywords'].keys()):
                 paragraphs_kw.append(paragraph_kw)
         return paragraphs_kw
+    
+    def merge_paragraphs(self, num):
+        pass
 
     def save_data(self):
         data = self.add_keywords()
