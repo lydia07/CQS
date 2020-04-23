@@ -4,7 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.nn.utils.rnn import pad_packed_sequence, pack_padded_sequence
 from torch_scatter import scatter_max
-from ./preprocess/data_utils import UNK_ID
+from preprocess.data_utils import UNK_ID
 
 INF = 1e12
 
@@ -59,7 +59,8 @@ class Encoder(nn.Module):
         h, c = states
 
         # self attention
-        mask = (src_seq == 0).byte()
+        # mask = (src_seq == 0).byte()
+        mask = (src_seq == 0).bool()
         memories = self.linear_trans(outputs)
         outputs = self.gated_self_attn(outputs, memories, mask)
 

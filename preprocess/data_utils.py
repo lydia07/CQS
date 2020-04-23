@@ -1,17 +1,26 @@
-from bert import Ner
-import pprint
 import json
-import tqdm
-from tqdm import tqdm
-import nltk
-from copy import deepcopy
-from collections import defaultdict
+import pickle
+import pprint
+import sys
+sys.path.append("..")
 import re
 import unicodedata
+from collections import defaultdict
+from copy import deepcopy
 
+import nltk
+import numpy as np
+import torch
+import torch.utils.data as data
+import tqdm
+from tqdm import tqdm
+# import bert.Ner as Ner
+# from bert import Ner
+from preprocess.bert import Ner
+import config
 
 PAD_TOKEN = "<PAD>"
-UNK_TOKEN = "unknown"
+UNK_TOKEN = "UNK"
 START_TOKEN = "<s>"
 END_TOKEN = "EOS"
 
@@ -104,6 +113,7 @@ class SquadData:
                             'keyword': keyword
                         }
                         pks.append(pk)
+        print(counter['beyonce'])
         return pks, counter
 
                     
@@ -141,6 +151,116 @@ class SquadData:
         
         src.close()
         tgt.close()
+
+
+class SquadDataWithTag(data.Dataset):
+    def __init__(self, src_file, tgt_file, max_len, word2idx):
+        self.srcs = []
+        self.tags = []
+
+        lines = open(src_file, 'r').readlines()
+        paragraph, tags = [], []
+        self.entity2idx = {
+                            'O': 0,
+                            'B-keyword': 1,
+                            'I-keyword': 2
+                            }
+        for line in lines:
+            line = line.strip()
+            if len(line) == 0:
+                paragraph.insert(0, START_TOKEN)
+                paragraph.append(END_TOKEN)
+                self.srcs.append(paragraph)
+
+                tags.insert(0, self.entity2idx['O'])
+                tags.append(self.entity2idx['O'])
+                self.tags.append(tags)
+                assert len(paragraph) == len(tags)
+                paragraph, tags = [], []
+            else:
+                tokens = line.split('\t')
+                word, tag = tokens[0], tokens[1]
+                paragraph.append(word)
+                tags.append(self.entity2idx[tag])
+            
+        self.tgts = open(tgt_file, 'r').readlines()
+
+        assert len(self.srcs) == len(self.tgts),\
+            "the number of source sequence {}" " and target sequence {} must be the same" \
+                .format(len(self.srcs), len(self.trgs))
+        
+        self.max_len = max_len
+        self.word2idx = word2idx
+        self.num_seqs = len(self.srcs)
+
+    def __getitem__(self, index):
+        src = self.srcs[index]
+        tgt = self.tgts[index]
+        tag = self.tags[index]
+
+        tag = torch.Tensor(tag[:self.max_len])
+        src, ext_src, oov_lst = self.context2ids(src ,self.word2idx)
+        tgt, ext_tgt = self.question2ids(tgt, self.word2idx, oov_lst)
+        return src, ext_src, tgt, ext_tgt, oov_lst, tag
+        
+    def __len__(self):
+        return self.num_seqs
+
+    def context2ids(self, tokens, word2idx):
+        ids = []
+        ext_ids = []
+        oov_lst = []
+        # START and END token is already in tokens lst
+        for token in tokens:
+            if token in word2idx:
+                ids.append(word2idx[token])
+                ext_ids.append(word2idx[token])
+            else:
+                ids.append(word2idx[UNK_TOKEN])
+                if token not in oov_lst:
+                    oov_lst.append(token)
+                ext_ids.append(len(word2idx) + oov_lst.index(token))
+            if len(ids) == self.max_len:
+                break
+        
+        ids = torch.Tensor(ids)
+        ext_ids = torch.Tensor(ext_ids)
+        return ids, ext_ids, oov_lst
+
+    def question2ids(self, seq, word2idx, oov_lst):
+        ids = []
+        ext_ids = []
+        ids.append(word2idx[START_TOKEN])
+        ext_ids.append(word2idx[START_TOKEN])
+        tokens = seq.strip().split(' ')
+
+        for token in tokens:
+            if token in word2idx:
+                ids.append(word2idx[token])
+                ext_ids.append(word2idx[token])
+            else:
+                ids.append(word2idx[UNK_TOKEN])
+                if token in oov_lst:
+                    ext_ids.append(len(word2idx) + oov_lst.index(token))
+                else:
+                    ext_ids.append(word2idx[UNK_TOKEN])
+        ids.append(word2idx[END_TOKEN])
+        ext_ids.append(word2idx[END_TOKEN])
+
+        ids = torch.Tensor(ids)
+        ext_ids = torch.Tensor(ext_ids)
+
+        return ids, ext_ids
+
+
+def get_loader(src_file, tgt_file, word2idx, batch_size):
+        dataset = SquadDataWithTag(src_file, tgt_file, config.max_seq_len,
+                                   word2idx)
+        dataloader = data.DataLoader(dataset=dataset,
+                                     batch_size=batch_size,
+                                     shuffle=False,
+                                     collate_fn=collate_fn_tag)
+        return dataloader
 
 
 def find_closest_span(tgtspan, spans):
@@ -196,9 +316,9 @@ def make_vocab(counter, vocab_file, max_vocab_size):
     word2idx = {}
     word2idx[PAD_TOKEN] = 0
     word2idx[UNK_TOKEN] = 1
+    # print('len_word2idx:{}'.format(len(word2idx)))
     word2idx[START_TOKEN] = 2
     word2idx[END_TOKEN] = 3
-
     for idx, (token, freq) in enumerate(sorted_vocab, start=4):
         if len(word2idx) == max_vocab_size:
             break
@@ -240,22 +360,44 @@ def make_embedding(embedding_file, output_file, word2idx):
         word = word_vec[0]
         vec = np.array(word_vec[1:], dtype=np.float32)
         word2embedding[word] = vec
-    
+    unk_vec = np.random.rand(300)
+    print(unk_vec)
+    word2embedding[UNK_TOKEN] = unk_vec
     embedding = np.zeros((len(word2idx), 300), dtype=np.float32)
     num_oov = 0
     # flag = True
     for word, idx in word2idx.items():
-        if idx==len(word2idx):
-            print('word:{},idx:{}'.format(word, idx))
-            break
         if word in word2embedding:
             embedding[idx] = word2embedding[word]
         else:
             embedding[idx] = word2embedding[UNK_TOKEN]
-            # embedding[idx] = word2embedding['UNK']
+            # embedding[idx] = word2embedding['unknown']
             num_oov += 1
     print("num OOV : {}".format(num_oov))
     with open(output_file, "wb") as f:
         pickle.dump(embedding, f)
         print('embedding file saved')
     return embedding
+
+
+def collate_fn_tag(data):
+    def merge(sequences):
+        lengths = [len(sequence) for sequence in sequences]
+        padded_seqs = torch.zeros(len(sequences), max(lengths)).long()
+        for i, seq in enumerate(sequences):
+            end = lengths[i]
+            padded_seqs[i, :end] = seq[:end]
+        return padded_seqs, lengths
+
+    data.sort(key=lambda x: len(x[0]), reverse=True)
+    src_seqs, ext_src_seqs, trg_seqs, ext_trg_seqs, oov_lst, tag_seqs = zip(*data)
+
+    src_seqs, src_len = merge(src_seqs)
+    ext_src_seqs, _ = merge(ext_src_seqs)
+    trg_seqs, trg_len = merge(trg_seqs)
+    ext_trg_seqs, _ = merge(ext_trg_seqs)
+    tag_seqs, _ = merge(tag_seqs)
+
+    assert src_seqs.size(1) == tag_seqs.size(1), "length of tokens and tags should be equal"
+
+    return src_seqs, ext_src_seqs, src_len, trg_seqs, ext_trg_seqs, trg_len, tag_seqs, oov_lst

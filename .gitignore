@@ -6,3 +6,8 @@
 /nqg_model/
 /nlu_model/
 /preprocess/__pycache__/
+/debug/
+/save/
+debug.py
+/preprocess/counter.json
+/preprocess/preprocess_old.py
