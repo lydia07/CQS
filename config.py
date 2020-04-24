@@ -15,8 +15,8 @@ word2idx_file = './dataset/SQuAD_t/word2idx.pkl'
 
 # model
 vocab_size = 45000
-model_path = './save/seq2seq/'
-train = True
+model_path = './save/seq2seq/train_0424003904/20_2.54'
+train = False
 device = 'cuda:1'
 use_gpu = True
 # debug = False
