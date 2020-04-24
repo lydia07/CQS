@@ -1,9 +1,14 @@
+#preprocess
+ratio = 0.5
 # train file
 train_src_file = './dataset/SQuAD_t/para-train.txt'
 train_tgt_file = './dataset/SQuAD_t/tgt-train.txt'
 # dev file
 dev_src_file = './dataset/SQuAD_t/para-dev.txt'
 dev_tgt_file = './dataset/SQuAD_t/tgt-dev.txt'
+# test file
+test_src_file = "./dataset/SQuAD_t/para-test.txt"
+test_tgt_file = "./dataset/SQuAD_t/tgt-test.txt"
 # embedding and dictionary file
 embedding = './dataset/SQuAD_t/embedding.pkl'
 word2idx_file = './dataset/SQuAD_t/word2idx.pkl'

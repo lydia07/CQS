@@ -18,6 +18,7 @@ from tqdm import tqdm
 # from bert import Ner
 from preprocess.bert import Ner
 import config
+from preprocess.keywords import (calc_tfidf, get_keywords)
 
 PAD_TOKEN = "<PAD>"
 UNK_TOKEN = "UNK"
@@ -31,18 +32,31 @@ END_ID = 3
 
 
 class SquadData:
-    def __init__(self, ner_model, data_dir):
+    def __init__(self, ner_model, data_dir, ratio=0.5):
         self.ner_model = ner_model
         self.data_dir = data_dir
         # self.output_dir = output_dir
+        self.ratio = ratio
         self.paragraphs = self.load_data()
-        # self.span_len = span_len
+        self.sents = self.get_sents()
+        self.tfidf, self.vocab = calc_tfidf(self.sents, word_tokenize)
+
         
     def load_data(self):
         with open(self.data_dir, 'r') as f:
             load_dict = json.load(f)
             data = load_dict['data']
             return data
+
+    def get_sents(self):
+        sents = []
+        for title in tqdm(self.paragraphs):
+            for para in title['paragraphs']:
+                for qa in para['qas']:
+                    if qa['is_impossible']:
+                        continue
+                    sents.append(clean_str(qa['question']))
+        return sents
 
     def generate_keywords(self, sent):
         keywords = []
@@ -62,13 +76,25 @@ class SquadData:
         # print('sent:{},keywords:{}'.format(sent, keywords))
         return keywords
 
+    
+
     def process_data(self):
         # counter is used to count the freq of word
+        debug_file = open('./debug.txt', 'a+')
+        data_stat = {
+                        'keyword': 0,
+                        'answer': 0,
+                        'not_generated': 0,
+                        'not_found': 0,
+                        'lost_total': 0,
+                        'total': 0,
+                    }
         counter = defaultdict(lambda: 0)
         pks = []
         total = 0
+        question_idx = 0
         for title in tqdm(self.paragraphs):
-            for para in  tqdm(title['paragraphs']):
+            for para in title['paragraphs']:
                 context = clean_str(para['context'])
                 context_tokens = word_tokenize(context)
                 for token in context_tokens:
@@ -85,24 +111,33 @@ class SquadData:
                     for token in question_tokens:
                         counter[token] += 1
                     
-                    keywords = self.generate_keywords(question)
-                    
+                    keywords = get_keywords(question_idx, question, word_tokenize, self.tfidf, 
+                                            self.vocab, self.ratio)
+                    keywords = merge_keywords(question, keywords)
+                    debug_msg = 'question:{}, keywords:{}'.format(question, keywords)
+                    debug_file.write(debug_msg + '\n')
+                    # keywords = self.generate_keywords(question)
+                    question_idx += 1
+                    data_stat['keyword'] += len(keywords)
+                    data_stat['total'] += 1
+                    # if not keywords:
+                    #     # if keyword is not detected, use answer instead
+                    #     # keywords.append(clean_str(qa['answers'][0]['text'])) 
+                    #     answer = clean_str(qa['answers'][0]['text'])
+                    #     keywords = self.generate_keywords(answer)
+                    #     data_stat['answer'] += 1
                     if not keywords:
-                        # if keyword is not detected, use answer instead
-                        # keywords.append(clean_str(qa['answers'][0]['text'])) 
-                        answer = clean_str(qa['answers'][0]['text'])
-                        keywords = self.generate_keywords(answer)
-                    if not keywords:
+                        data_stat['not_generated'] += 1
                         continue
                     for keyword in keywords:
                         answer = clean_str(qa['answers'][0]['text'])
                         answer_spans = get_spans(context_tokens, answer)
                         keyword_spans = get_spans(context_tokens, keyword)
                         if not (answer_spans and keyword_spans):
+                            data_stat['not_found'] += 1
                             continue
                         answer_span = answer_spans[0]
-                        # if not keyword_spans:
-                        #     continue
+                        
                         keyword_span = find_closest_span(answer_span, keyword_spans)
                         
                         pk = {
@@ -113,11 +148,12 @@ class SquadData:
                             'keyword': keyword
                         }
                         pks.append(pk)
-        print(counter['beyonce'])
+        data_stat['lost_total'] = data_stat['not_generated'] + data_stat['not_found']
+        print(data_stat)
         return pks, counter
 
                     
-    def make_tag_format(self, pks,src_file, tgt_file):
+    def make_tag_format(self, pks, src_file, tgt_file):
         src = open(src_file, 'w')
         tgt = open(tgt_file, 'w')
         for para in tqdm(pks):
@@ -253,6 +289,29 @@ class SquadDataWithTag(data.Dataset):
         return ids, ext_ids
 
 
+def merge_keywords(sent, keywords):
+        res = []
+        sent_tokens = word_tokenize(sent)
+        keywords_with_id = []
+        for keyword in keywords:
+            id = sent_tokens.index(keyword)
+            keywords_with_id.append((
+                id,
+                keyword
+            ))
+        keywords_with_id.sort(key=lambda t: t[0])
+        new_keyword = keywords_with_id[0][1]
+        for idx in range(len(keywords_with_id) - 1):
+            now = keywords_with_id[idx][0]
+            nxt = keywords_with_id[idx + 1][0]
+            if abs(now - nxt) == 1:
+                new_keyword += ' ' + keywords_with_id[idx + 1][1]
+            else:
+                res.append(new_keyword)
+                new_keyword = keywords_with_id[idx + 1][1]
+        res.append(new_keyword)
+        return res    
+
 def get_loader(src_file, tgt_file, word2idx, batch_size):
         dataset = SquadDataWithTag(src_file, tgt_file, config.max_seq_len,
                                    word2idx)
@@ -275,25 +334,19 @@ def find_closest_span(tgtspan, spans):
 
 def get_spans(tokens, text):
     spans = []
-    text = text.rstrip('.')
+    # text = text.rstrip('.')
     text_tokens = word_tokenize(text)
-    # print(tokens)
-    # print(text_tokens)
+    if len(text_tokens) <= 0:
+        return spans
     match = False
     for idx, token in enumerate(tokens):
         if token.startswith(text_tokens[0]) or token == text_tokens[0] or token.endswith(text_tokens[0]):
-        # if token in text_tokens[0] or text_tokens[0] in token:
+        # if (token in text_tokens[0] or text_tokens[0] in token):
             # print(idx)
             i = idx
             for t_token in text_tokens:
-                # print('text_token:{}, span_token:{}'.format(tokens[i], t_token))
-                # if t_token == '.':
-                #     continue
                 if i == len(tokens):
                     break
-                # if '.' in tokens[i] or '.' in t_token:
-                #     print(idx)
-                #     print('text_token:{}, span_token:{}'.format(tokens[i], t_token))
                 if (tokens[i] not in t_token) and (t_token not in tokens[i]):
                 # if not(tokens[i].startswith(t_token) or t_token.startswith(tokens[i])):
                     match = False
@@ -305,9 +358,10 @@ def get_spans(tokens, text):
                 span = {}
                 span['start'] = idx
                 span['end'] = idx + len(text_tokens) - 1
-                spans.append(span)
-    # if not spans:
-    #     print('why???')
+                # print('start:{}, end:{}'.format(span['start'], span['end']))
+                if span['end'] < len(tokens):
+                    spans.append(span)
+                # assert span['start'] <= span['end'] and span['end'] < len(tokens)             
     return spans
 
 
