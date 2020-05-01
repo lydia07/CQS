@@ -152,8 +152,8 @@ class QueryGenerator(object):
                 else:
                     tags[idx] = self.entity2idx['I-keyword']
         return tags
-
-    def generate_query(self, paragraph, keyword):
+    
+    def generate_querys(self, paragraph, keyword):
         tokens, tags = [], []
         tokens = word_tokenize(clean_str(paragraph))
 
@@ -191,7 +191,17 @@ class QueryGenerator(object):
 
 if __name__ == "__main__":
     qg = QueryGenerator(config.model_path)
-    para = 'In September 1760, and before any hostilities erupted, Governor Vaudreuil negotiated from Montreal a capitulation with General Amherst. Amherst granted Vaudreuil\'s request that any French residents who chose to remain in the colony would be given freedom to continue worshiping in their Roman Catholic tradition, continued ownership of their property, and the right to remain undisturbed in their homes. The British provided medical treatment for the sick and wounded French soldiers and French regular troops were returned to France aboard British ships with an agreement that they were not to serve again in the present war.'
+    para = 'In September 1760, and before any hostilities erupted, \
+            Governor Vaudreuil negotiated from Montreal a capitulation \
+            with General Amherst. Amherst granted Vaudreuil\'s request \
+            that any French residents who chose to remain in the colony \
+            would be given freedom to continue worshiping in their Roman \
+            Catholic tradition, continued ownership of their property, \
+            and the right to remain undisturbed in their homes. The British \
+            provided medical treatment for the sick and wounded French soldiers \
+            and French regular troops were returned to France aboard British \
+            ships with an agreement that they were not to serve again in the \
+            present war.'
     keyword = 'medical treatment'
     res = qg.generate_query(para, keyword)
     print(res)
