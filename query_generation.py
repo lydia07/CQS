@@ -141,25 +141,19 @@ class QueryGenerator(object):
 
         return ids_, extended_ids_, oov_lst
 
-    def get_tags(self, src_len, spans):
+    def get_tags(self, src_len, span):
         tags = [self.entity2idx['O']] * src_len
-        for  span in spans:
-            start = span['start']
-            end = span['end']
-            for idx in range(start, end + 1):
-                if idx == start:
-                    tags[idx] = self.entity2idx['B-keyword']
-                else:
-                    tags[idx] = self.entity2idx['I-keyword']
+        # for  span in spans:
+        start = span['start']
+        end = span['end']
+        for idx in range(start, end + 1):
+            if idx == start:
+                tags[idx] = self.entity2idx['B-keyword']
+            else:
+                tags[idx] = self.entity2idx['I-keyword']
         return tags
     
-    def generate_querys(self, paragraph, keyword):
-        tokens, tags = [], []
-        tokens = word_tokenize(clean_str(paragraph))
-
-        keyword = clean_str(keyword)
-        spans = get_spans(tokens, keyword)
-        tags = self.get_tags(len(tokens), spans)
+    def get_one_query(self, tokens, tags):
         # add start and end token
         tokens.insert(0, START_TOKEN)
         tokens.append(END_TOKEN)
@@ -188,6 +182,19 @@ class QueryGenerator(object):
         # print(decoded_words)
         return decoded_words
 
+    def generate_querys(self, paragraph, keyword):
+        querys = []
+        tokens, tags = [], []
+        tokens = word_tokenize(clean_str(paragraph))
+
+        keyword = clean_str(keyword)
+        spans = get_spans(tokens, keyword)
+        for span in spans:
+            tags = self.get_tags(len(tokens), span)
+            query = self.get_one_query(tokens, tags)
+            querys.append(query)
+        return querys
+
 
 if __name__ == "__main__":
     qg = QueryGenerator(config.model_path)
@@ -202,6 +209,6 @@ if __name__ == "__main__":
             and French regular troops were returned to France aboard British \
             ships with an agreement that they were not to serve again in the \
             present war.'
-    keyword = 'medical treatment'
-    res = qg.generate_query(para, keyword)
+    keyword = 'French regular troops'
+    res = qg.generate_querys(para, keyword)
     print(res)

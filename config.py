@@ -1,5 +1,8 @@
 #preprocess
 ratio = 0.5
+# squad file
+train_file = './dataset/SQuAD/train-v2.0.json'
+dev_file = './dataset/SQuAD/dev-v2.0.json'
 # train file
 train_src_file = './dataset/SQuAD_t/para-train.txt'
 train_tgt_file = './dataset/SQuAD_t/tgt-train.txt'
@@ -17,7 +20,7 @@ word2idx_file = './dataset/SQuAD_t/word2idx.pkl'
 vocab_size = 45000
 model_path = './save/seq2seq/train_0424003904/20_2.54'
 train = False
-device = 'cuda:1'
+device = 'cuda:3'
 use_gpu = True
 # debug = False
 freeze_embedding = True
@@ -38,3 +41,8 @@ beam_size = 10
 min_decode_step = 8
 max_decode_step = 30
 output_dir = "./result/pointer_maxout_ans"
+
+# experiment
+trec_file = '../experiment/trec/queries.doctrain.tsv'
+output_file = '../experiment/trec/queries.json'
+criterion = 0.35

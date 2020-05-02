@@ -13,3 +13,4 @@ debug.py
 /preprocess/preprocess_old.py
 /preprocess/debug.txt
 /result/
+/experiment/trec/
